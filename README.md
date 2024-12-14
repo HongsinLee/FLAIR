@@ -5,14 +5,6 @@ We extend the codebase from [Mammoth](https://github.com/aimagelab/mammoth) to i
 
 ---
 
-## Features
-
-- **FLAIR Integration**: Implements our method to enhance robustness against adversarial attacks in incremental learning.
-- **Dataset Support**: Out-of-the-box support for CIFAR-10, CIFAR-100, and other custom datasets.
-- **Customizability**: Easily extend with new models and datasets.
-
----
-
 ## Installation
 
 - Clone the repository:

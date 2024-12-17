@@ -3,6 +3,8 @@
 This is the official repository for **"Enhancing Robustness in Incremental Learning with Adversarial Training" (AAAI 2025)**.  
 We extend the codebase from [Mammoth](https://github.com/aimagelab/mammoth) to implement FLAIR, a novel method for enhancing adversarial robustness in Class Incremental Learning.
 
+You can find the full paper on [arXiv](https://arxiv.org/abs/2312.03289).
+
 ---
 
 ## Installation

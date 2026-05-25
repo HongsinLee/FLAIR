@@ -134,7 +134,52 @@ class FLAIR(ContinualModel):
         return -pred
 
     def observe(self, inputs, labels, not_aug_inputs, logits=None):
-        return 
+
+        if not hasattr(self, 'classes_so_far'):
+            self.register_buffer('classes_so_far', labels.unique().to('cpu'))
+        else:
+            self.register_buffer('classes_so_far', torch.cat((
+                self.classes_so_far, labels.to('cpu'))).unique())
+
+        outputs = self.net(inputs)
+
+        pc = self.task * self.dataset.N_CLASSES_PER_TASK
+        ac = (self.task + 1) * self.dataset.N_CLASSES_PER_TASK
+
+        if self.task == 0:
+            outputs = outputs[:, :ac]
+            targets = self.eye[labels][:, :ac]
+            loss = F.binary_cross_entropy_with_logits(outputs, targets)
+            assert loss >= 0
+        else:
+            inputs_adv = PGD(inputs, labels, self, alpha=self.args.beta/255,
+                             steps=int(self.args.gamma), random_start=False)
+            outputs_adv = self.net(inputs_adv)
+            self.old_net.eval()
+            outputs = outputs[:, :ac]
+            outputs_adv = outputs_adv[:, :ac]
+            cur_diff = (outputs - outputs_adv)[:, :pc]
+            with torch.no_grad():
+                outputs_adv_old = self.old_net(inputs_adv)
+                outputs_old = self.old_net(inputs)
+                logits = torch.sigmoid(outputs_old)
+                old_diff = (outputs_old - outputs_adv_old)[:, :pc]
+
+            criterion_kl = nn.KLDivLoss(reduction="batchmean")
+            diff_kl_loss = self.args.alpha * criterion_kl(
+                F.log_softmax(cur_diff, dim=1),
+                F.softmax(old_diff.detach(), dim=1))
+
+            targets = self.eye[labels][:, pc:ac]
+            comb_targets = torch.cat((logits[:, :pc], targets), dim=1)
+            loss = F.binary_cross_entropy_with_logits(outputs, comb_targets) + diff_kl_loss
+            assert loss >= 0
+
+        self.opt.zero_grad()
+        loss.backward()
+        self.opt.step()
+
+        return loss.item()
 
 
 
@@ -168,6 +213,7 @@ class FLAIR(ContinualModel):
             with torch.no_grad():
                 old_plus = self.old_net(inputs_adv)
                 old_output = self.old_net(inputs)
+                old_output_sigmoid = torch.sigmoid(old_output)
                 old_plus_sigmoid = torch.sigmoid(old_plus)
                 old_diff = (old_plus - old_output)[:, :pc]
 
@@ -176,10 +222,14 @@ class FLAIR(ContinualModel):
             cur_diff = (outputs_plus - outputs)[:, :pc]
 
             criterion_kl = nn.KLDivLoss(reduction="batchmean")
+            FPD_loss = self.args.beta * criterion_kl(
+                F.log_softmax(cur_diff, dim=1),
+                F.softmax(old_diff.detach(), dim=1))
 
             targets = self.eye[labels][:, pc:ac]
             loss = (1 - pc/ac) * F.binary_cross_entropy_with_logits(outputs_plus[:, pc:ac], targets) + self.args.alpha * (pc/ac) * F.binary_cross_entropy_with_logits(outputs_plus[:, :pc], old_plus_sigmoid[:, :pc])
-            loss +=  self.args.beta * criterion_kl(F.log_softmax(cur_diff, dim=1), F.softmax(old_diff.detach(), dim=1))
+            loss += FPD_loss
+            loss += self.args.gamma * (pc/ac) * F.binary_cross_entropy_with_logits(outputs_plus[:, :pc], old_output_sigmoid[:, :pc])
             assert loss >= 0
 
 

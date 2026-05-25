@@ -4,12 +4,12 @@ dataset=seq-cifar10
 method=AT
 wandb_project=CIL
 
-alpha=1
+alpha=0
 beta=1
+gamma=2
 
-
-buffer=2000
-model=flair
+buffer=2000  # no-buffer: set buffer=0
+model=flair  # no-buffer: set model=flair_nobuffer
 aug=none
 
 architecture=RES-18
@@ -22,5 +22,5 @@ seed=0
 
 for aug in none ra aua
 do
-    CUDA_VISIBLE_DEVICES=$GPU_ID python  ./utils/main.py --model $model --robust_method $method --wandb_name ${model}_${alpha}_${beta}_${aug}_${epochs}_${lr}_${batch_size} --wandb_tags cifar10 --n_epochs $epochs --dataset $dataset --buffer_size $buffer --lr $lr --optim_wd $optim_wd --alpha $alpha --beta $beta --nowand 0 --batch_size $batch_size --wandb_project $wandb_project --architecture $architecture --aug $aug --seed $seed
+    CUDA_VISIBLE_DEVICES=$GPU_ID python  ./utils/main.py --model $model --robust_method $method --wandb_name ${model}_${alpha}_${beta}_${gamma}_${aug}_${epochs}_${lr}_${batch_size} --wandb_tags cifar10 --n_epochs $epochs --dataset $dataset --buffer_size $buffer --lr $lr --optim_wd $optim_wd --alpha $alpha --beta $beta --gamma $gamma --nowand 0 --batch_size $batch_size --wandb_project $wandb_project --architecture $architecture --aug $aug --seed $seed
 done

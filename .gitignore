@@ -88,3 +88,6 @@ dmypy.json
 .pytype/
 cython_debug/
 wandb
+wandbtmp/
+dataset_folder/
+old/

@@ -140,7 +140,21 @@ class FLAIRnoBuffer(ContinualModel):
 
     def observe(self, inputs, labels, not_aug_inputs, logits=None):
 
-        return
+        if not hasattr(self, 'classes_so_far'):
+            self.register_buffer('classes_so_far', labels.unique().to('cpu'))
+        else:
+            self.register_buffer('classes_so_far', torch.cat((
+                self.classes_so_far, labels.to('cpu'))).unique())
+
+        self.class_means = None
+        self.opt.zero_grad()
+        loss = self.get_loss(inputs, labels, self.task)
+
+        loss.backward()
+
+        self.opt.step()
+
+        return loss.item()
 
 
 
@@ -175,6 +189,7 @@ class FLAIRnoBuffer(ContinualModel):
             with torch.no_grad():
                 old_plus = self.old_net(inputs_adv)
                 old_output = self.old_net(inputs)
+                old_output_sigmoid = torch.sigmoid(old_output)
                 old_plus_sigmoid = torch.sigmoid(old_plus)
                 old_diff = (old_plus - old_output)[:, :pc]
 
@@ -183,10 +198,14 @@ class FLAIRnoBuffer(ContinualModel):
             cur_diff = (outputs_plus - outputs)[:, :pc]
 
             criterion_kl = nn.KLDivLoss(reduction="batchmean")
+            FPD_loss = self.args.beta * criterion_kl(
+                F.log_softmax(cur_diff, dim=1),
+                F.softmax(old_diff.detach(), dim=1))
 
             targets = self.eye[labels][:, pc:ac]
             loss = (1 - pc/ac) * F.binary_cross_entropy_with_logits(outputs_plus[:, pc:ac], targets) + self.args.alpha * (pc/ac) * F.binary_cross_entropy_with_logits(outputs_plus[:, :pc], old_plus_sigmoid[:, :pc])
-            loss +=  self.args.beta * criterion_kl(F.log_softmax(cur_diff, dim=1), F.softmax(old_diff.detach(), dim=1))
+            loss += FPD_loss
+            loss += self.args.gamma * (pc/ac) * F.binary_cross_entropy_with_logits(outputs_plus[:, :pc], old_output_sigmoid[:, :pc])
             assert loss >= 0
 
 
